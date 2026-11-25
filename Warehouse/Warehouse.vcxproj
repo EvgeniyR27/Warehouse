@@ -139,6 +139,7 @@
     <ClInclude Include="Discount.h" />
     <ClInclude Include="Lab1Adapter.h" />
     <ClInclude Include="OrderItem.h" />
+    <ClInclude Include="OrderObserver.h" />
     <ClInclude Include="Price.h" />
     <ClInclude Include="Product.h" />
     <ClInclude Include="ProductFactory.h" />
