@@ -126,6 +126,7 @@
     <ClCompile Include="Delivery.cpp" />
     <ClCompile Include="Discount.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Order.cpp" />
     <ClCompile Include="OrderItem.cpp" />
     <ClCompile Include="Price.cpp" />
     <ClCompile Include="Product.cpp" />
@@ -138,6 +139,7 @@
     <ClInclude Include="Delivery.h" />
     <ClInclude Include="Discount.h" />
     <ClInclude Include="Lab1Adapter.h" />
+    <ClInclude Include="Order.h" />
     <ClInclude Include="OrderItem.h" />
     <ClInclude Include="OrderObserver.h" />
     <ClInclude Include="Price.h" />
