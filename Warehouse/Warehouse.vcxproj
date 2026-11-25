@@ -132,6 +132,7 @@
     <ClCompile Include="Weight.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Lab1Adapter.h" />
     <ClInclude Include="Price.h" />
     <ClInclude Include="Product.h" />
     <ClInclude Include="ProductFactory.h" />
