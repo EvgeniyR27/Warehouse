@@ -3,7 +3,7 @@
 #include <utility>
 
 OrderItem::OrderItem(const Product& product, Quantity quantity)
-    : productId_(product.getId()),
+    : productId_(Lab1Adapter::productIdToString(product.getId())),
     productName_(product.getName()),
     unitPrice_(product.getPrice()),
     unitWeight_(product.getWeight()),

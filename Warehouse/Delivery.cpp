@@ -142,6 +142,10 @@ bool DeliveryProxy::isAvailable(const Order& order) const {
     return realStrategy_->isAvailable(order);
 }
 
+std::string DeliveryProxy::getEstimatedTime() const {
+    return realStrategy_->getEstimatedTime();
+}
+
 Price DeliveryProxy::getCost(const Order& order) const {
     // 1. Всегда проверяем доступность ДО обращения к кешу
     if (!realStrategy_->isAvailable(order)) {

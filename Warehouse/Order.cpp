@@ -147,8 +147,9 @@ void Order::addItem(const Product& product, Quantity quantity) {
         throw std::invalid_argument("Quantity to add must be positive");
     }
 
+    std::string targetId = Lab1Adapter::productIdToString(product.getId());
     auto it = std::find_if(items_.begin(), items_.end(), [&](const OrderItem& item) {
-        return item.getProductId() == product.getId();
+        return item.getProductId() == targetId;
         });
 
     if (it != items_.end()) {
