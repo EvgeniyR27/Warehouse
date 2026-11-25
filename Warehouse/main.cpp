@@ -1,175 +1,201 @@
 #include <iostream>
-#include <clocale>
-#include "Price.h"
-#include "Quantity.h"
-#include "Weight.h"
-#include "Product.h"
-#include "ProductFactory.h"
+#include <memory>
 #include "Warehouse.h"
-
-// Вспомогательная функция для красивого вывода содержимого склада через константный итератор
-void printWarehouse(const Warehouse& warehouse, const std::string& title) {
-    std::cout << "=== " << title << " (Товаров: " << warehouse.getCurrentSize()
-        << " из " << warehouse.getMaxSize() << ") ===\n";
-    if (warehouse.getCurrentSize() == 0) {
-        std::cout << "  [Склад пуст]\n";
-    }
-    for (const auto& product : warehouse) {
-        std::cout << "  ID: " << product.getId()
-            << " | Категория: " << product.getCategory()
-            << " | Название: " << product.getName()
-            << " | Цена: " << product.getPrice().getValue() << " руб."
-            << " | Остаток: " << product.getQuantity().getValue() << " шт."
-            << " | Вес: " << product.getWeight().getValue() << " кг\n";
-    }
-    std::cout << "\n";
-}
+#include "ProductFactory.h"
+#include "OrderManager.h"
+#include "Delivery.h"
+#include "Discount.h"
 
 int main() {
-    std::setlocale(LC_ALL, "Russian");
-
     try {
-        // =========================================================================
-        // СЦЕНАРИЙ 1: Создание склада, добавление товаров через разные фабрики,
-        //             вывод списка через итератор
-        // =========================================================================
-        std::cout << ">>> СЦЕНАРИЙ 1: Создание склада и наполнение через фабрики <<<\n";
+        std::cout << "========================================================\n";
+        std::cout << "1. LAB 1 COMPATIBILITY: WAREHOUSE & PRODUCTS\n";
+        std::cout << "========================================================\n";
 
-        SmartphoneFactory smartphoneFactory;
-        LaptopFactory laptopFactory;
-        TShirtFactory tshirtFactory;
-        JacketFactory jacketFactory;
-        MilkFactory milkFactory;
-        BreadFactory breadFactory;
+        Warehouse warehouse;
+        // Используем фабрику/конструктор товаров из 1-й работы
+        // (при необходимости подставьте сигнатуру вашего ProductFactory из Лабы 1)
+        auto laptop = ProductFactory::createProduct(
+            "P-101", "Gaming Laptop", "Electronics",
+            Lab1Adapter::makePriceFromRubles(80000.0),
+            Quantity(10),
+            Lab1Adapter::makeWeightFromKg(2.5)
+        );
+        auto mouse = ProductFactory::createProduct(
+            "P-102", "Wireless Mouse", "Electronics",
+            Lab1Adapter::makePriceFromRubles(2000.0),
+            Quantity(50),
+            Lab1Adapter::makeWeightFromKg(0.2)
+        );
+        auto dumbbell = ProductFactory::createProduct(
+            "P-103", "Heavy Dumbbell 12kg", "Sport",
+            Lab1Adapter::makePriceFromRubles(4500.0),
+            Quantity(15),
+            Lab1Adapter::makeWeightFromKg(12.0)
+        );
 
-        Warehouse mainWarehouse(10); // Создаём склад вместимостью 10 позиций
+        warehouse.addProduct(laptop);
+        warehouse.addProduct(mouse);
+        warehouse.addProduct(dumbbell);
+        std::cout << "Products added to Warehouse successfully.\n\n";
 
-        // Передаём 0 в качестве ID, чтобы сработал статический счётчик nextId_ (либо можно задать явно)
-        mainWarehouse.addProduct(smartphoneFactory.createProduct(0, "iPhone 15", 85000, 5, 0.17));
-        mainWarehouse.addProduct(laptopFactory.createProduct(0, "MacBook Air", 120000, 3, 1.24));
-        mainWarehouse.addProduct(tshirtFactory.createProduct(0, "Футболка базовая", 1500, 20, 0.2));
-        mainWarehouse.addProduct(jacketFactory.createProduct(0, "Куртка зимняя", 9500, 7, 1.5));
-        mainWarehouse.addProduct(milkFactory.createProduct(0, "Молоко 3.2%", 95, 50, 1.0));
-        mainWarehouse.addProduct(breadFactory.createProduct(0, "Хлеб Бородинский", 60, 30, 0.4));
+        std::cout << "========================================================\n";
+        std::cout << "2. DELIVERY STRATEGIES & DELIVERY PROXY (CACHE + REJECT)\n";
+        std::cout << "========================================================\n";
 
-        printWarehouse(mainWarehouse, "Основной склад после добавления товаров");
+        OrderManager manager;
+        auto order1 = manager.createOrder("client_ivan", "Moscow");
+        order1->addItem(*laptop, Quantity(1)); // 2.5 кг
+        order1->addItem(*mouse, Quantity(2));  // 0.4 кг -> Итого 2.9 кг
 
-        // =========================================================================
-        // СЦЕНАРИЙ 2: Копирование склада, изменение товаров в копии,
-        //             проверка независимости оригинального склада
-        // =========================================================================
-        std::cout << ">>> СЦЕНАРИЙ 2: Глубокое копирование склада <<<\n";
+        auto courierProxy = std::make_shared<DeliveryProxy>(std::make_shared<CourierDelivery>());
+        auto pickupProxy = std::make_shared<DeliveryProxy>(std::make_shared<PickupDelivery>());
+        auto postProxy = std::make_shared<DeliveryProxy>(std::make_shared<PostDelivery>());
 
-        Warehouse copiedWarehouse = mainWarehouse; // Вызывается конструктор копирования
+        // Проверяем все 3 доставки на допустимой массе (2.9 кг)
+        std::cout << "Pickup cost:  " << Lab1Adapter::priceToRubles(pickupProxy->getCost(*order1)) << " rub\n";
+        std::cout << "Post cost:    " << Lab1Adapter::priceToRubles(postProxy->getCost(*order1)) << " rub\n";
+        std::cout << "Courier cost: " << Lab1Adapter::priceToRubles(courierProxy->getCost(*order1)) << " rub\n";
 
-        // Изменяем цену и количество первого товара в копии через обычный итератор
-        for (auto& product : copiedWarehouse) {
-            if (product.getId() == 1) {
-                product.setPrice(Price(70000));
-                product.changeQuantity(10);
-            }
-        }
+        // Повторный запрос без изменения заказа -> должен сработать CACHE HIT
+        std::cout << "Courier repeat request: "
+            << Lab1Adapter::priceToRubles(courierProxy->getCost(*order1)) << " rub\n";
 
-        std::cout << "Проверка товара с ID = 1 после модификации копии:\n";
-        std::cout << "  В оригинале -> Цена: " << mainWarehouse.findById(1)->getPrice().getValue()
-            << " руб., Остаток: " << mainWarehouse.findById(1)->getQuantity().getValue() << " шт.\n";
-        std::cout << "  В копии     -> Цена: " << copiedWarehouse.findById(1)->getPrice().getValue()
-            << " руб., Остаток: " << copiedWarehouse.findById(1)->getQuantity().getValue() << " шт.\n\n";
+        // Добавляем ещё мышь -> масса изменилась (3.1 кг) -> ключ кеша изменился -> пересчёт
+        order1->addItem(*mouse, Quantity(1));
+        std::cout << "Courier after weight change: "
+            << Lab1Adapter::priceToRubles(courierProxy->getCost(*order1)) << " rub\n";
 
-        // =========================================================================
-        // СЦЕНАРИЙ 3: Перемещение склада через конструктор перемещения,
-        //             проверка отсутствия копирования
-        // =========================================================================
-        std::cout << ">>> СЦЕНАРИЙ 3: Перемещение склада (Move semantics) <<<\n";
+        // Инвалидация кеша при смене версии тарифа
+        courierProxy->bumpTariffVersion();
+        std::cout << "Courier after tariff version bump: "
+            << Lab1Adapter::priceToRubles(courierProxy->getCost(*order1)) << " rub\n";
 
-        // Сохраняем адрес первого товара в памяти до перемещения
-        Product* addressBeforeMove = copiedWarehouse.findById(1);
-
-        Warehouse movedWarehouse(std::move(copiedWarehouse)); // Конструктор перемещения
-
-        Product* addressAfterMove = movedWarehouse.findById(1);
-
-        std::cout << "Размер старого склада после std::move: " << copiedWarehouse.getCurrentSize() << "\n";
-        std::cout << "Размер нового склада после std::move:  " << movedWarehouse.getCurrentSize() << "\n";
-        std::cout << "Адрес товара ID=1 до перемещения:    " << addressBeforeMove << "\n";
-        std::cout << "Адрес товара ID=1 после перемещения: " << addressAfterMove
-            << " (адреса совпадают — глубокого копирования не было)\n\n";
-
-        // =========================================================================
-        // СЦЕНАРИЙ 4: Поиск товаров по ID, категории и цене, удаление по ID и индексу
-        // =========================================================================
-        std::cout << ">>> СЦЕНАРИЙ 4: Поиск и удаление товаров <<<\n";
-
-        // 1. Поиск по ID
-        Product* foundById = mainWarehouse.findById(2);
-        if (foundById) {
-            std::cout << "Найден по ID=2: " << foundById->getName() << "\n";
-        }
-
-        // 2. Поиск по категории
-        std::vector<Product*> foodProducts = mainWarehouse.findByCategory("food");
-        std::cout << "Товары категории 'food' (" << foodProducts.size() << " шт.): ";
-        for (size_t i = 0; i < foodProducts.size(); ++i) {
-            std::cout << foodProducts[i]->getName() << (i + 1 < foodProducts.size() ? ", " : "\n");
-        }
-
-        // 3. Поиск по цене
-        std::vector<Product*> priceProducts = mainWarehouse.findByPrice(Price(1500));
-        std::cout << "Товары с ценой 1500 руб. (" << priceProducts.size() << " шт.): ";
-        for (size_t i = 0; i < priceProducts.size(); ++i) {
-            std::cout << priceProducts[i]->getName() << "\n";
-        }
-
-        // 4. Удаление по ID и по индексу
-        std::cout << "Удаляем товар с ID=6 (Хлеб) и товар по индексу 0 (iPhone 15)...\n";
-        mainWarehouse.removeById(6);
-        mainWarehouse.removeByIndex(0);
-
-        printWarehouse(mainWarehouse, "Основной склад после удаления");
-
-        // =========================================================================
-        // СЦЕНАРИЙ 5: Перемещение товара между складами через transferTo,
-        //             изменение остатка и цены
-        // =========================================================================
-        std::cout << ">>> СЦЕНАРИЙ 5: Перемещение товара между складами (transferTo) <<<\n";
-
-        Warehouse secondaryWarehouse(5); // Второй склад
-        Product* laptop = mainWarehouse.findById(2);
-        if (laptop) {
-            // Меняем цену и остаток перед отправкой
-            laptop->setPrice(Price(115000));
-            laptop->changeQuantity(2);
-            // Перемещаем на второй склад
-            laptop->transferTo(secondaryWarehouse);
-        }
-
-        printWarehouse(mainWarehouse, "Основной склад (остаток ноутбуков обнулён)");
-        printWarehouse(secondaryWarehouse, "Второй склад (получил ноутбуки)");
-
-        // =========================================================================
-        // ТЕСТИРОВАНИЕ: Проверка выброса исключений при некорректных данных
-        // =========================================================================
-        std::cout << ">>> ТЕСТИРОВАНИЕ ВАЛИДАЦИИ И ОГРАНИЧЕНИЙ <<<\n";
-
+        // Проверка отказа по превышению массы (добавляем гантель 12 кг -> итого 15.1 кг > 10 кг для Почты)
+        auto heavyOrder = manager.createOrder("client_anna", "Moscow");
+        heavyOrder->addItem(*dumbbell, Quantity(1)); // 12 кг
         try {
-            Price invalidPrice(-500);
+            postProxy->getCost(*heavyOrder);
         }
-        catch (const std::exception& e) {
-            std::cout << "[Тест 1 пройден] Перехвачена ошибка цены: " << e.what() << "\n";
+        catch (const std::exception& ex) {
+            std::cout << "Expected rejection (Post > 10kg): " << ex.what()
+                << " | Order status remained: " << orderStatusToString(heavyOrder->getStatus()) << "\n";
         }
 
+        // Проверка отказа по неподдерживаемому региону
+        auto remoteOrder = manager.createOrder("client_oleg", "Vladivostok");
+        remoteOrder->addItem(*mouse, Quantity(1));
         try {
-            Warehouse tinyWarehouse(1);
-            tinyWarehouse.addProduct(milkFactory.createProduct(0, "Молоко", 90, 10, 1.0));
-            tinyWarehouse.addProduct(breadFactory.createProduct(0, "Хлеб", 50, 10, 0.5));
+            courierProxy->getCost(*remoteOrder);
         }
-        catch (const std::exception& e) {
-            std::cout << "[Тест 2 пройден] Перехвачено переполнение склада: " << e.what() << "\n";
+        catch (const std::exception& ex) {
+            std::cout << "Expected rejection (Region): " << ex.what() << "\n";
         }
+
+        std::cout << "\n--- CourierProxy Logs ---\n";
+        for (const auto& entry : courierProxy->getLogs()) {
+            std::cout << entry << "\n";
+        }
+        std::cout << "--- PostProxy Logs ---\n";
+        for (const auto& entry : postProxy->getLogs()) {
+            std::cout << entry << "\n";
+        }
+        std::cout << "\n";
+
+        std::cout << "========================================================\n";
+        std::cout << "3. ALL 4 DISCOUNTS & RECALCULATION IDEMPOTENCY\n";
+        std::cout << "========================================================\n";
+
+        // Назначаем курьерскую доставку (500 руб.) и применяем все 4 акции:
+        // Порядок: 1) 10% скидка -> 2) 5% cashback -> 3) бесплатная доставка -> 4) подарок
+        order1->setDelivery(courierProxy);
+        order1->applyDiscount(std::make_shared<PercentageDiscount>(10.0));
+        order1->applyDiscount(std::make_shared<CashbackDiscount>(5.0));
+        order1->applyDiscount(std::make_shared<FreeDeliveryDiscount>());
+        order1->applyDiscount(std::make_shared<GiftDiscount>("GIFT-01", "Branded Mousepad", Lab1Adapter::makeWeightFromKg(0.1)));
+
+        std::cout << *order1 << "\n";
+
+        // Проверяем, что повторный пересчёт (например, при добавлении ещё 1 мыши)
+        // не дублирует подарок и корректно пересчитывает скидку и кэшбэк
+        order1->addItem(*mouse, Quantity(1));
+        std::cout << "After adding 1 more mouse (gifts count = " << order1->getGifts().size() << "):\n";
+        std::cout << *order1 << "\n";
+
+        std::cout << "========================================================\n";
+        std::cout << "4. OBSERVER, LIFECYCLE, DOUBLE PAYMENT & PRICE LOCK\n";
+        std::cout << "========================================================\n";
+
+        ConsoleOrderObserver auditLogger("AuditObserver");
+        order1->subscribe(&auditLogger);
+        order1->subscribe(&auditLogger); // Повторная подписка игнорируется (дублей не будет)
+
+        order1->pay();
+        Price paidAmount = order1->getFinalPrice();
+
+        // Повторная оплата не вызывает событие Observer и не удваивает оборот
+        order1->pay();
+        std::cout << "Revenue after duplicate pay() call: "
+            << Lab1Adapter::priceToRubles(manager.getTotalRevenue()) << " rub\n";
+
+        // Изменяем цену товара на складе после оплаты — оплаченная сумма заказа не меняется
+        laptop->setPrice(Lab1Adapter::makePriceFromRubles(120000.0));
+        std::cout << "Paid order total after catalog price change: "
+            << Lab1Adapter::priceToRubles(order1->getFinalPrice())
+            << " rub (was " << Lab1Adapter::priceToRubles(paidAmount) << " rub)\n";
+
+        order1->ship();
+        order1->unsubscribe(&auditLogger); // Отписываем наблюдателя перед доставкой
+        order1->deliver();                 // Сообщение от AuditObserver уже не выведется
+
+        std::cout << "\n========================================================\n";
+        std::cout << "5. ORDER MANAGER LIMITS, CANCELLATION & STATISTICS\n";
+        std::cout << "========================================================\n";
+
+        // У client_ivan order1 уже Delivered (неактивен). Создаём 5 активных заказов подряд:
+        std::vector<std::shared_ptr<Order>> ivanOrders;
+        for (int i = 0; i < 5; ++i) {
+            auto ord = manager.createOrder("client_ivan", "Moscow");
+            ord->addItem(*mouse, Quantity(1));
+            ivanOrders.push_back(ord);
+        }
+        std::cout << "Ivan active orders: " << manager.getActiveOrdersCount("client_ivan") << "\n";
+
+        // Попытка создать 6-й активный заказ -> должна быть отклонена
+        try {
+            manager.createOrder("client_ivan", "Moscow");
+        }
+        catch (const std::exception& ex) {
+            std::cout << "Expected limit error on 6th order: " << ex.what() << "\n";
+        }
+
+        // Оплачиваем один из новых заказов и затем отменяем его до отправки (возврат средств)
+        ivanOrders[0]->pay();
+        std::cout << "Revenue before refund: "
+            << Lab1Adapter::priceToRubles(manager.getTotalRevenue()) << " rub\n";
+
+        ivanOrders[0]->cancel(); // Возврат 2000 руб. + освобождение 1 слота активных заказов
+        std::cout << "Revenue after paid order cancellation (refund): "
+            << Lab1Adapter::priceToRubles(manager.getTotalRevenue()) << " rub\n";
+        std::cout << "Ivan active orders after cancel: "
+            << manager.getActiveOrdersCount("client_ivan") << "\n";
+
+        // Теперь слот свободен, и новый заказ снова создаётся успешно
+        auto extraOrder = manager.createOrder("client_ivan", "Moscow");
+        extraOrder->addItem(*mouse, Quantity(1));
+        std::cout << "Created Order #" << extraOrder->getId() << " after slot freed!\n";
+
+        std::cout << "\n--- Final Manager Statistics ---\n";
+        std::cout << "Total orders created: " << manager.getTotalOrdersCount() << "\n";
+        std::cout << "Unique clients count: " << manager.getUniqueClientsCount() << "\n";
+        std::cout << "Gross revenue:        " << Lab1Adapter::priceToRubles(manager.getGrossRevenue()) << " rub\n";
+        std::cout << "Total refunds:        " << Lab1Adapter::priceToRubles(manager.getTotalRefunds()) << " rub\n";
+        std::cout << "Net turnover:         " << Lab1Adapter::priceToRubles(manager.getTotalRevenue()) << " rub\n";
 
     }
-    catch (const std::exception& e) {
-        std::cerr << "Непредвиденная ошибка: " << e.what() << "\n";
+    catch (const std::exception& ex) {
+        std::cerr << "Unhandled exception: " << ex.what() << "\n";
+        return 1;
     }
 
     return 0;
